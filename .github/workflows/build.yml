@@ -37,3 +37,32 @@ jobs:
         with:
           name: constructionwand
           path: build/libs/*.jar
+
+  client-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # The client needs a display; Xvfb provides a virtual one with Mesa software OpenGL.
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri
+
+      # Starts a real client, runs the scripted tests in src/clienttest, and fails unless the report says PASS.
+      - name: Run client tests
+        run: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew clientTest
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-test-report
+          path: |
+            build/clienttest/report.txt
+            run/clienttest/logs/latest.log

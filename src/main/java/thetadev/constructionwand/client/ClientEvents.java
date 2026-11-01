@@ -16,6 +16,8 @@ import thetadev.constructionwand.network.ModMessages;
 import thetadev.constructionwand.network.PacketQueryUndo;
 import thetadev.constructionwand.network.PacketWandOption;
 
+import java.util.function.IntPredicate;
+
 public class ClientEvents
 {
     private boolean optPressed;
@@ -86,8 +88,12 @@ public class ClientEvents
         event.setCanceled(true);
     }
 
+    // Simulated key presses do not change the physical key state GLFW reports, so client tests replace this.
+    public static IntPredicate keyStateSource =
+            id -> InputConstants.isKeyDown(Minecraft.getInstance().getWindow().getWindow(), id);
+
     private static boolean isKeyDown(int id) {
-        return InputConstants.isKeyDown(Minecraft.getInstance().getWindow().getWindow(), id);
+        return keyStateSource.test(id);
     }
 
     public static boolean isOptKeyDown() {
