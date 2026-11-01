@@ -1,0 +1,39 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew build
+
+      # Boots a headless server with the mod loaded and runs every GameTest.
+      # The process exit code is the number of failed required tests, so any failure fails the job.
+      - name: Run GameTests
+        run: ./gradlew runGameTestServer
+
+      # Fails if the committed generated resources no longer match what the data generators produce.
+      - name: Check generated data is up to date
+        run: |
+          ./gradlew runData
+          git diff --exit-code -- src/generated ':!src/generated/resources/.cache'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: constructionwand
+          path: build/libs/*.jar

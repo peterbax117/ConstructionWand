@@ -24,6 +24,14 @@ sourceSets.main.resources {
     exclude 'src/generated/**/.cache'
 }
 
+// GameTests live in their own source set so they are never packaged into the release jar.
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
 repositories {
     maven {
         name = 'BlameJared (JEI)'
@@ -56,6 +64,13 @@ neoForge {
                     '--existing', file('src/main/resources/').getAbsolutePath()
         }
 
+        // Headless server that runs every GameTest and exits; the exit code is the number of failed required tests.
+        gameTestServer {
+            type = 'gameTestServer'
+            sourceSet = sourceSets.gametest
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.DEBUG
@@ -65,9 +80,12 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(sourceSets.gametest)
         }
     }
 }
+
+neoForge.addModdingDependenciesTo(sourceSets.gametest)
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
