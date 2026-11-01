@@ -1,20 +1,20 @@
 package thetadev.constructionwand.clienttest;
 
-import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
+import io.github.peterbax117.modtestharness.client.ClientTest;
+import io.github.peterbax117.modtestharness.client.ClientTestContext;
+import io.github.peterbax117.modtestharness.client.ClientTestHolder;
+import io.github.peterbax117.modtestharness.client.SimulatedKeys;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.FastColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
-import net.neoforged.neoforge.client.ClientHooks;
 import org.lwjgl.glfw.GLFW;
 import thetadev.constructionwand.ConstructionWand;
 import thetadev.constructionwand.api.IWandUpgrade;
@@ -29,41 +29,31 @@ import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 
+import static io.github.peterbax117.modtestharness.client.ClientTestContext.check;
+
 /**
- * Client-side tests. They drive the real input paths where the game allows it: the sneak key mapping,
- * vanilla use/attack key mappings, the keyboard handler for the option key and NeoForge's scroll hook.
- * The physical option key state is the one thing that has to be simulated, via ClientEvents.keyStateSource.
- *
+ * Client tests for Construction Wand, run by neoforge-mod-test-harness (gradlew clientTest).
  * The player stands at {@link #STAND} in a creative superflat world, facing north towards a test wall.
  */
+@ClientTestHolder
 public final class ClientTests
 {
-    public record Case(String name, Consumer<ClientTestHarness> body) {}
-
     private static final BlockPos STAND = new BlockPos(0, -60, 0);
     private static final int WALL_Z = -3;
-    private static final IntPredicate PHYSICAL_KEYS = ClientEvents.keyStateSource;
 
-    public static List<Case> all() {
-        return List.of(
-                new Case("tooltips render for wand and core", ClientTests::tooltips),
-                new Case("sneak + option key + right click opens the options screen", ClientTests::optionsScreen),
-                new Case("every options screen button updates the server", ClientTests::everyOptionButton),
-                new Case("sneak + scroll changes the direction lock", ClientTests::scrollChangesLock),
-                new Case("sneak + left click switches the core and tints the wand", ClientTests::leftClickSwitchesCore),
-                new Case("placement preview, undo preview and undo", ClientTests::placeAndUndo)
-        );
+    static {
+        // ClientEvents polls the physical option key; let it also see keys held by the harness.
+        IntPredicate physical = ClientEvents.keyStateSource;
+        ClientEvents.keyStateSource = key -> SimulatedKeys.isDown(key) || physical.test(key);
     }
 
-    // Test cases
-
-    private static void tooltips(ClientTestHarness h) {
-        h.onClient(() -> {
-            Minecraft mc = h.mc();
+    @ClientTest(value = "tooltips render for wand and core", order = 1)
+    public static void tooltips(ClientTestContext ctx) {
+        ctx.onClient(() -> {
+            var mc = ctx.mc();
             Item.TooltipContext context = Item.TooltipContext.of(mc.level);
             List<Component> wandLines = new ItemStack(ModItems.WAND_IRON.get()).getTooltipLines(context, mc.player, TooltipFlag.Default.NORMAL);
             check(containsKey(wandLines, "constructionwand.tooltip.blocks"), "Wand tooltip should show the block limit: " + wandLines);
@@ -74,50 +64,50 @@ public final class ClientTests
         });
     }
 
-    private static void optionsScreen(ClientTestHarness h) {
-        prepare(h, () -> new ItemStack(ModItems.WAND_IRON.get()));
-        look(h, -90);
+    @ClientTest(value = "sneak + option key + right click opens the options screen", order = 2)
+    public static void optionsScreen(ClientTestContext ctx) {
+        prepare(ctx, () -> new ItemStack(ModItems.WAND_IRON.get()));
+        ctx.look(180, -90);
 
         // With the default config, sneak alone must not open the screen.
-        sneak(h, true);
-        h.onClient(() -> KeyMapping.click(h.mc().options.keyUse.getKey()));
-        h.waitTicks(10);
-        check(h.onClient(() -> !(h.mc().screen instanceof ScreenWand)), "Sneak + right click without the option key opened the screen");
+        ctx.sneak(true);
+        ctx.clickUse();
+        ctx.waitTicks(10);
+        check(ctx.onClient(() -> !(ctx.mc().screen instanceof ScreenWand)), "Sneak + right click without the option key opened the screen");
 
-        optionKey(h, true);
-        h.onClient(() -> KeyMapping.click(h.mc().options.keyUse.getKey()));
-        h.await("options screen to open", 5, () -> h.mc().screen instanceof ScreenWand);
+        optionKey(ctx, true);
+        ctx.clickUse();
+        ScreenWand screen = ctx.awaitScreen(ScreenWand.class);
 
         // Buttons are created in the order cores, lock, direction, replace, match, random.
-        h.onClient(() -> {
-            List<Button> buttons = h.mc().screen.children().stream()
-                    .filter(Button.class::isInstance).map(Button.class::cast).toList();
+        ctx.onClient(() -> {
+            List<Button> buttons = buttons(screen);
             check(buttons.size() == 6, "Expected 6 option buttons, found " + buttons.size());
             Button lock = buttons.get(1);
-            h.mc().screen.mouseClicked(lock.getX() + 5, lock.getY() + 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            screen.mouseClicked(lock.getX() + 5, lock.getY() + 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
         });
-        awaitServerLock(h, WandOptions.LOCK.HORIZONTAL);
+        awaitServerLock(ctx, WandOptions.LOCK.HORIZONTAL);
     }
 
-    private static void everyOptionButton(ClientTestHarness h) {
-        prepare(h, () -> new ItemStack(ModItems.WAND_IRON.get()));
-        look(h, -90);
-        sneak(h, true);
-        optionKey(h, true);
-        h.onClient(() -> KeyMapping.click(h.mc().options.keyUse.getKey()));
-        h.await("options screen to open", 5, () -> h.mc().screen instanceof ScreenWand);
+    @ClientTest(value = "every options screen button updates the server", order = 3)
+    public static void everyOptionButton(ClientTestContext ctx) {
+        prepare(ctx, () -> new ItemStack(ModItems.WAND_IRON.get()));
+        ctx.look(180, -90);
+        ctx.sneak(true);
+        optionKey(ctx, true);
+        ctx.clickUse();
+        ScreenWand screen = ctx.awaitScreen(ScreenWand.class);
 
-        // Order: cores, lock, direction, replace, match, random. Click every option except lock (covered above).
-        h.onClient(() -> {
-            List<Button> buttons = h.mc().screen.children().stream()
-                    .filter(Button.class::isInstance).map(Button.class::cast).toList();
+        // Click every option except lock (covered above).
+        ctx.onClient(() -> {
+            List<Button> buttons = buttons(screen);
             check(!buttons.get(0).active, "Core button should be disabled when only the default core is installed");
             for(int i : new int[]{2, 3, 4, 5}) {
                 Button button = buttons.get(i);
-                h.mc().screen.mouseClicked(button.getX() + 5, button.getY() + 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+                screen.mouseClicked(button.getX() + 5, button.getY() + 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
             }
         });
-        h.await("server to apply direction, replace, match and random", 5, () -> h.onServer(p -> {
+        ctx.await("server to apply direction, replace, match and random", () -> ctx.onServer(p -> {
             WandOptions options = new WandOptions(p.getMainHandItem().copy());
             return options.direction.get() == WandOptions.DIRECTION.PLAYER
                     && !options.replace.get()
@@ -126,148 +116,100 @@ public final class ClientTests
         }));
     }
 
-    private static void scrollChangesLock(ClientTestHarness h) {
-        prepare(h, () -> new ItemStack(ModItems.WAND_IRON.get()));
+    @ClientTest(value = "sneak + scroll changes the direction lock", order = 4)
+    public static void scrollChangesLock(ClientTestContext ctx) {
+        prepare(ctx, () -> new ItemStack(ModItems.WAND_IRON.get()));
 
-        h.onClient(() -> ClientHooks.onMouseScroll(h.mc().mouseHandler, 0, -1));
-        h.waitTicks(10);
-        check(serverOptions(h).lock.get() == WandOptions.LOCK.NOLOCK, "Scrolling without sneak must not change the lock");
+        ctx.scroll(-1);
+        ctx.waitTicks(10);
+        check(ctx.onServer(p -> new WandOptions(p.getMainHandItem().copy()).lock.get()) == WandOptions.LOCK.NOLOCK,
+                "Scrolling without sneak must not change the lock");
 
-        sneak(h, true);
-        h.onClient(() -> ClientHooks.onMouseScroll(h.mc().mouseHandler, 0, -1));
-        awaitServerLock(h, WandOptions.LOCK.HORIZONTAL);
+        ctx.sneak(true);
+        ctx.scroll(-1);
+        awaitServerLock(ctx, WandOptions.LOCK.HORIZONTAL);
     }
 
-    private static void leftClickSwitchesCore(ClientTestHarness h) {
-        prepare(h, () -> {
+    @ClientTest(value = "sneak + left click switches the core and tints the wand", order = 5)
+    public static void leftClickSwitchesCore(ClientTestContext ctx) {
+        prepare(ctx, () -> {
             ItemStack wand = new ItemStack(ModItems.WAND_IRON.get());
             new WandOptions(wand).addUpgrade((IWandUpgrade) ModItems.CORE_ANGEL.get());
             return wand;
         });
-        look(h, -90);
-        check(h.onClient(() -> h.mc().getItemColors().getColor(h.mc().player.getMainHandItem(), 1)) == -1,
+        ctx.look(180, -90);
+        check(ctx.onClient(() -> ctx.mc().getItemColors().getColor(ctx.mc().player.getMainHandItem(), 1)) == -1,
                 "Wand without an active core should not be tinted");
 
-        sneak(h, true);
-        h.onClient(() -> KeyMapping.click(h.mc().options.keyAttack.getKey()));
-        h.await("server to switch to the angel core", 5,
-                () -> h.onServer(p -> new WandOptions(p.getMainHandItem()).cores.get() == ModItems.CORE_ANGEL.get()));
+        ctx.sneak(true);
+        ctx.clickAttack();
+        ctx.await("server to switch to the angel core",
+                () -> ctx.onServer(p -> new WandOptions(p.getMainHandItem()).cores.get() == ModItems.CORE_ANGEL.get()));
 
-        h.onClient(() -> {
-            ItemStack wand = h.mc().player.getMainHandItem();
-            int tint = h.mc().getItemColors().getColor(wand, 1);
+        ctx.onClient(() -> {
+            ItemStack wand = ctx.mc().player.getMainHandItem();
+            int tint = ctx.mc().getItemColors().getColor(wand, 1);
             int expected = FastColor.ARGB32.opaque(0xE9B115);
             check(tint == expected, String.format("Angel core tint should be %08X, was %08X", expected, tint));
 
             float usingCore = ItemProperties.getProperty(wand, ConstructionWand.loc("using_core"))
-                    .call(wand, h.mc().level, h.mc().player, 0);
+                    .call(wand, ctx.mc().level, ctx.mc().player, 0);
             check(usingCore == 1f, "using_core model property should be 1, was " + usingCore);
         });
     }
 
-    private static void placeAndUndo(ClientTestHarness h) {
-        prepare(h, () -> new ItemStack(ModItems.WAND_IRON.get()));
-        h.onServerDo(p -> {
-            for(int x = -1; x <= 1; x++) for(int y = -60; y <= -58; y++) {
-                p.serverLevel().setBlockAndUpdate(new BlockPos(x, y, WALL_Z), Blocks.STONE.defaultBlockState());
-            }
-        });
-        look(h, 0);
+    @ClientTest(value = "placement preview, undo preview and undo", order = 6)
+    public static void placeAndUndo(ClientTestContext ctx) {
+        prepare(ctx, () -> new ItemStack(ModItems.WAND_IRON.get()));
+        ctx.fill(new BlockPos(-1, -60, WALL_Z), new BlockPos(1, -58, WALL_Z), Blocks.STONE.defaultBlockState());
+        ctx.look(180, 0);
         BlockPos target = new BlockPos(0, -59, WALL_Z);
-        h.await("crosshair on the test wall", 5,
-                () -> h.mc().hitResult instanceof BlockHitResult hit && hit.getBlockPos().equals(target));
+        ctx.await("crosshair on the test wall",
+                () -> ctx.mc().hitResult instanceof BlockHitResult hit && hit.getBlockPos().equals(target));
 
         Set<BlockPos> expected = new HashSet<>();
         for(int x = -1; x <= 1; x++) for(int y = -60; y <= -58; y++) expected.add(new BlockPos(x, y, WALL_Z + 1));
 
         // The normal placement preview is computed while the block highlight renders.
-        h.await("placement preview to show 9 blocks", 5, () -> expected.equals(previewPositions(h)));
+        ctx.await("placement preview to show 9 blocks", () -> expected.equals(previewPositions()));
 
-        h.onClient(() -> KeyMapping.click(h.mc().options.keyUse.getKey()));
-        h.await("server to place 9 blocks", 5, () -> h.onServer(p -> expected.stream()
+        ctx.clickUse();
+        ctx.await("server to place 9 blocks", () -> ctx.onServer(p -> expected.stream()
                 .allMatch(pos -> p.serverLevel().getBlockState(pos).is(Blocks.STONE))));
 
         // Holding sneak + option key asks the server for the undo preview.
-        sneak(h, true);
-        optionKey(h, true);
-        h.await("undo preview from the server", 5, () -> {
-            Set<BlockPos> undo = ConstructionWand.instance.renderBlockPreview.undoBlocks;
-            return undo != null && undo.equals(expected);
-        });
+        ctx.sneak(true);
+        optionKey(ctx, true);
+        ctx.await("undo preview from the server", () -> expected.equals(ConstructionWand.instance.renderBlockPreview.undoBlocks));
 
-        h.onClient(() -> KeyMapping.click(h.mc().options.keyUse.getKey()));
-        h.await("server to undo the placement", 5, () -> h.onServer(p -> expected.stream()
+        ctx.clickUse();
+        ctx.await("server to undo the placement", () -> ctx.onServer(p -> expected.stream()
                 .allMatch(pos -> p.serverLevel().getBlockState(pos).isAir())));
     }
 
     // Helpers
 
-    /** Clears the test area and inventory, gives the wand and places the player at the start position. */
-    private static void prepare(ClientTestHarness h, Supplier<ItemStack> wand) {
-        // Empty the hand first and wait for the client to see it, so a previous test's wand can't be mistaken for the new one.
-        h.onServerDo(p -> {
-            p.getInventory().clearContent();
-            p.getInventory().selected = 0;
-            p.inventoryMenu.broadcastChanges();
-        });
-        h.onClient(() -> h.mc().player.getInventory().selected = 0);
-        h.await("client inventory to clear", 5, () -> h.mc().player.getMainHandItem().isEmpty());
-
-        h.onServerDo(p -> {
-            for(int x = -3; x <= 3; x++) for(int y = -60; y <= -56; y++) for(int z = -6; z <= 3; z++) {
-                p.serverLevel().setBlockAndUpdate(new BlockPos(x, y, z), Blocks.AIR.defaultBlockState());
-            }
-            p.getInventory().setItem(0, wand.get());
-            p.inventoryMenu.broadcastChanges();
-            p.teleportTo(p.serverLevel(), STAND.getX() + 0.5, STAND.getY(), STAND.getZ() + 0.5, 180f, 0f);
-        });
-        h.await("client to receive the wand", 5, () -> h.mc().player.getMainHandItem().is(ModItems.WAND_IRON.get()));
-        h.waitTicks(10);
+    /** Clears the test area, gives the wand and places the player at the start position facing north. */
+    private static void prepare(ClientTestContext ctx, Supplier<ItemStack> wand) {
+        ctx.fill(new BlockPos(-3, -60, -6), new BlockPos(3, -56, 3), Blocks.AIR.defaultBlockState());
+        ctx.giveMainHand(wand);
+        ctx.teleport(STAND, 180, 0);
     }
 
-    private static void look(ClientTestHarness h, float pitch) {
-        h.onClient(() -> {
-            h.mc().player.setYRot(180f);
-            h.mc().player.setXRot(pitch);
-        });
-        h.waitTicks(5);
+    private static void optionKey(ClientTestContext ctx, boolean down) {
+        ctx.pressKey(ConfigClient.OPT_KEY.get(), down);
     }
 
-    private static void sneak(ClientTestHarness h, boolean down) {
-        h.onClient(() -> h.mc().options.keyShift.setDown(down));
-        h.await("player crouch state " + down, 5, () -> h.mc().player.isCrouching() == down);
-        h.waitTicks(3);
+    private static List<Button> buttons(ScreenWand screen) {
+        return screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast).toList();
     }
 
-    /** Presses the option key through the real keyboard handler, which fires InputEvent.Key. */
-    private static void optionKey(ClientTestHarness h, boolean down) {
-        h.onClient(() -> {
-            int key = ConfigClient.OPT_KEY.get();
-            ClientEvents.keyStateSource = down ? id -> id == key || PHYSICAL_KEYS.test(id) : PHYSICAL_KEYS;
-            h.mc().keyboardHandler.keyPress(h.mc().getWindow().getWindow(), key, 0,
-                    down ? GLFW.GLFW_PRESS : GLFW.GLFW_RELEASE, 0);
-        });
-        h.waitTicks(3);
+    private static void awaitServerLock(ClientTestContext ctx, WandOptions.LOCK expected) {
+        ctx.await("server wand lock to become " + expected,
+                () -> ctx.onServer(p -> new WandOptions(p.getMainHandItem().copy()).lock.get() == expected));
     }
 
-    static void releaseAllInput(Minecraft mc) {
-        mc.options.keyShift.setDown(false);
-        if(ClientEvents.keyStateSource != PHYSICAL_KEYS) {
-            ClientEvents.keyStateSource = PHYSICAL_KEYS;
-            mc.keyboardHandler.keyPress(mc.getWindow().getWindow(), ConfigClient.OPT_KEY.get(), 0, GLFW.GLFW_RELEASE, 0);
-        }
-    }
-
-    private static WandOptions serverOptions(ClientTestHarness h) {
-        return h.onServer((ServerPlayer p) -> new WandOptions(p.getMainHandItem().copy()));
-    }
-
-    private static void awaitServerLock(ClientTestHarness h, WandOptions.LOCK expected) {
-        h.await("server wand lock to become " + expected, 5,
-                () -> h.onServer(p -> new WandOptions(p.getMainHandItem().copy()).lock.get() == expected));
-    }
-
-    private static Set<BlockPos> previewPositions(ClientTestHarness h) {
+    private static Set<BlockPos> previewPositions() {
         try {
             Field field = ConstructionWand.instance.renderBlockPreview.getClass().getDeclaredField("wandJob");
             field.setAccessible(true);
@@ -287,9 +229,5 @@ public final class ClientTests
         if(component.getContents() instanceof TranslatableContents translatable && translatable.getKey().equals(key)) return true;
         for(Component sibling : component.getSiblings()) if(hasKey(sibling, key)) return true;
         return false;
-    }
-
-    private static void check(boolean condition, String message) {
-        if(!condition) throw new AssertionError(message);
     }
 }

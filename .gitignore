@@ -26,3 +26,5 @@ forge*changelog.txt
 
 .cache
 logs
+# CI checkout of neoforge-mod-test-harness
+/harness/

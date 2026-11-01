@@ -18,6 +18,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.util.FakePlayer;
+import io.github.peterbax117.modtestharness.gametest.HarnessTemplates;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import thetadev.constructionwand.ConstructionWand;
@@ -28,13 +29,15 @@ import thetadev.constructionwand.items.ModItems;
 import java.util.List;
 import java.util.Optional;
 
-import static thetadev.constructionwand.gametest.GameTestSupport.*;
+import static io.github.peterbax117.modtestharness.gametest.GameTestSupport.*;
+import static thetadev.constructionwand.gametest.WandTestSupport.*;
 
 /**
  * Feature coverage: every wand tier, both cores, every wand option, supply rules and server config limits.
  * Expected numbers come from the default server config (ConfigServer).
  */
-@GameTestHolder(ConstructionWand.MODID)
+// Uses the harness's shared empty templates, so the holder namespace is the harness namespace.
+@GameTestHolder(HarnessTemplates.NAMESPACE)
 @PrefixGameTestTemplate(false)
 public class WandFeatureTests
 {

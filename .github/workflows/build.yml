@@ -5,12 +5,21 @@ on:
   pull_request:
   workflow_dispatch:
 
+# GameTests and client tests use neoforge-mod-test-harness, checked out into ./harness.
+env:
+  MOD_TEST_HARNESS_DIR: harness
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/checkout@v7
+        with:
+          repository: peterbax117/neoforge-mod-test-harness
+          path: harness
 
       - uses: actions/setup-java@v6
         with:
@@ -44,6 +53,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/checkout@v7
+        with:
+          repository: peterbax117/neoforge-mod-test-harness
+          path: harness
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -55,7 +69,7 @@ jobs:
       - name: Install virtual display
         run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri
 
-      # Starts a real client, runs the scripted tests in src/clienttest, and fails unless the report says PASS.
+      # Starts a real client, runs every @ClientTest, and fails unless the report says PASS.
       - name: Run client tests
         run: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew clientTest
 

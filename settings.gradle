@@ -7,3 +7,9 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
+// Composite build: resolves io.github.peterbax117:neoforge-mod-test-harness from source. See build.gradle.
+def harnessDir = file(System.getenv('MOD_TEST_HARNESS_DIR') ?: '../neoforge-mod-test-harness')
+if(harnessDir.isDirectory()) {
+    includeBuild(harnessDir)
+}

@@ -23,6 +23,7 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.util.FakePlayer;
+import io.github.peterbax117.modtestharness.gametest.HarnessTemplates;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import thetadev.constructionwand.ConstructionWand;
@@ -36,13 +37,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import static thetadev.constructionwand.gametest.GameTestSupport.*;
+import static io.github.peterbax117.modtestharness.gametest.GameTestSupport.*;
+import static thetadev.constructionwand.gametest.WandTestSupport.*;
 
 /**
  * Server-side GameTests for Construction Wand. Run headless with {@code gradlew runGameTestServer}.
  * Each test uses an empty 9x5x9 structure and builds its own fixture, usually a 3x3 stone floor at y=1.
  */
-@GameTestHolder(ConstructionWand.MODID)
+// Uses the harness's shared empty templates, so the holder namespace is the harness namespace.
+@GameTestHolder(HarnessTemplates.NAMESPACE)
 @PrefixGameTestTemplate(false)
 public class WandGameTests
 {
