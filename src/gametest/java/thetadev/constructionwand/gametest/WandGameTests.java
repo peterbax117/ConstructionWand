@@ -1,6 +1,5 @@
 package thetadev.constructionwand.gametest;
 
-import com.mojang.authlib.GameProfile;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -12,27 +11,18 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.BundleContents;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemContainerContents;
-import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
-import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.util.FakePlayer;
-import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import thetadev.constructionwand.ConstructionWand;
@@ -45,7 +35,8 @@ import thetadev.constructionwand.network.PacketWandOption;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
+
+import static thetadev.constructionwand.gametest.GameTestSupport.*;
 
 /**
  * Server-side GameTests for Construction Wand. Run headless with {@code gradlew runGameTestServer}.
@@ -236,38 +227,6 @@ public class WandGameTests
     }
 
     // Helpers
-
-    private static FakePlayer survivalPlayer(GameTestHelper helper, ItemStack wand) {
-        // A unique profile per test keeps undo history and inventories from leaking between tests.
-        FakePlayer player = FakePlayerFactory.get(helper.getLevel(), new GameProfile(UUID.randomUUID(), "wand-test"));
-        player.setGameMode(GameType.SURVIVAL);
-        player.getInventory().clearContent();
-        Vec3 standing = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(4, 2, 0)));
-        player.moveTo(standing.x, standing.y, standing.z, 0, 0);
-        player.setItemInHand(InteractionHand.MAIN_HAND, wand);
-        return player;
-    }
-
-    private static void buildFloor(GameTestHelper helper) {
-        for(int x = 3; x <= 5; x++) for(int z = 3; z <= 5; z++) helper.setBlock(x, 1, z, Blocks.STONE);
-    }
-
-    private static InteractionResult useWandOn(GameTestHelper helper, Player player, BlockPos relative, Direction face) {
-        BlockPos pos = helper.absolutePos(relative);
-        Vec3 hitLocation = Vec3.atCenterOf(pos).relative(face, 0.5);
-        UseOnContext context = new UseOnContext(player, InteractionHand.MAIN_HAND, new BlockHitResult(hitLocation, face, pos, false));
-        return player.getMainHandItem().useOn(context);
-    }
-
-    private static void assertLayer(GameTestHelper helper, Block block, int y) {
-        for(int x = 3; x <= 5; x++) for(int z = 3; z <= 5; z++) helper.assertBlockPresent(block, new BlockPos(x, y, z));
-    }
-
-    private static int countItem(Player player, Item item) {
-        int total = 0;
-        for(ItemStack stack : player.getInventory().items) if(stack.is(item)) total += stack.getCount();
-        return total;
-    }
 
     private static <T> T roundTrip(StreamCodec<ByteBuf, T> codec, T value) {
         ByteBuf buffer = Unpooled.buffer();

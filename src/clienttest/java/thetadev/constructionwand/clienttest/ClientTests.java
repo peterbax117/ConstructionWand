@@ -52,6 +52,7 @@ public final class ClientTests
         return List.of(
                 new Case("tooltips render for wand and core", ClientTests::tooltips),
                 new Case("sneak + option key + right click opens the options screen", ClientTests::optionsScreen),
+                new Case("every options screen button updates the server", ClientTests::everyOptionButton),
                 new Case("sneak + scroll changes the direction lock", ClientTests::scrollChangesLock),
                 new Case("sneak + left click switches the core and tints the wand", ClientTests::leftClickSwitchesCore),
                 new Case("placement preview, undo preview and undo", ClientTests::placeAndUndo)
@@ -96,6 +97,33 @@ public final class ClientTests
             h.mc().screen.mouseClicked(lock.getX() + 5, lock.getY() + 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
         });
         awaitServerLock(h, WandOptions.LOCK.HORIZONTAL);
+    }
+
+    private static void everyOptionButton(ClientTestHarness h) {
+        prepare(h, () -> new ItemStack(ModItems.WAND_IRON.get()));
+        look(h, -90);
+        sneak(h, true);
+        optionKey(h, true);
+        h.onClient(() -> KeyMapping.click(h.mc().options.keyUse.getKey()));
+        h.await("options screen to open", 5, () -> h.mc().screen instanceof ScreenWand);
+
+        // Order: cores, lock, direction, replace, match, random. Click every option except lock (covered above).
+        h.onClient(() -> {
+            List<Button> buttons = h.mc().screen.children().stream()
+                    .filter(Button.class::isInstance).map(Button.class::cast).toList();
+            check(!buttons.get(0).active, "Core button should be disabled when only the default core is installed");
+            for(int i : new int[]{2, 3, 4, 5}) {
+                Button button = buttons.get(i);
+                h.mc().screen.mouseClicked(button.getX() + 5, button.getY() + 5, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            }
+        });
+        h.await("server to apply direction, replace, match and random", 5, () -> h.onServer(p -> {
+            WandOptions options = new WandOptions(p.getMainHandItem().copy());
+            return options.direction.get() == WandOptions.DIRECTION.PLAYER
+                    && !options.replace.get()
+                    && options.match.get() == WandOptions.MATCH.ANY
+                    && options.random.get();
+        }));
     }
 
     private static void scrollChangesLock(ClientTestHarness h) {
