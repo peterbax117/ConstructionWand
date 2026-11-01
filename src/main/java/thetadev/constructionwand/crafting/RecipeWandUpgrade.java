@@ -1,9 +1,9 @@
 package thetadev.constructionwand.crafting;
 
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
+import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CustomRecipe;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer;
@@ -24,11 +24,11 @@ public class RecipeWandUpgrade extends CustomRecipe
     }
 
     @Override
-    public boolean matches(@Nonnull CraftingContainer inv, @Nonnull Level worldIn) {
+    public boolean matches(@Nonnull CraftingInput inv, @Nonnull Level worldIn) {
         ItemStack wand = null;
         IWandUpgrade upgrade = null;
 
-        for(int i = 0; i < inv.getContainerSize(); i++) {
+        for(int i = 0; i < inv.size(); i++) {
             ItemStack stack = inv.getItem(i);
             if(!stack.isEmpty()) {
                 if(wand == null && stack.getItem() instanceof ItemWand) wand = stack;
@@ -44,11 +44,11 @@ public class RecipeWandUpgrade extends CustomRecipe
 
     @Nonnull
     @Override
-    public ItemStack assemble(@Nonnull CraftingContainer inv, @Nonnull RegistryAccess registryAccess) {
+    public ItemStack assemble(@Nonnull CraftingInput inv, @Nonnull HolderLookup.Provider registries) {
         ItemStack wand = null;
         IWandUpgrade upgrade = null;
 
-        for(int i = 0; i < inv.getContainerSize(); i++) {
+        for(int i = 0; i < inv.size(); i++) {
             ItemStack stack = inv.getItem(i);
             if(!stack.isEmpty()) {
                 if(stack.getItem() instanceof ItemWand) wand = stack;

@@ -2,7 +2,7 @@ package thetadev.constructionwand.wand;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -102,7 +102,7 @@ public class WandJob
                     // If the item cant be taken, undo the placement
                     if(wandSupplier.takeItemStack(snapshot.getRequiredItems()) == 0) {
                         executed.add(snapshot);
-                        wand.hurtAndBreak(1, player, e -> e.broadcastBreakEvent(InteractionHand.MAIN_HAND));
+                        wand.hurtAndBreak(1, player, player.getMainHandItem() == wand ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND);
                     }
                     else {
                         ConstructionWand.LOGGER.info("Item could not be taken. Remove block: " +

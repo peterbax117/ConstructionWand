@@ -1,16 +1,15 @@
 package thetadev.constructionwand.containers.handlers;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.BundleContents;
 import thetadev.constructionwand.api.IContainerHandler;
 import thetadev.constructionwand.basics.WandUtil;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 public class HandlerBundle implements IContainerHandler
 {
@@ -21,48 +20,37 @@ public class HandlerBundle implements IContainerHandler
 
     @Override
     public int countItems(Player player, ItemStack itemStack, ItemStack inventoryStack) {
-        return getContents(inventoryStack).filter((stack) -> WandUtil.stackEquals(stack, itemStack))
-                .map(ItemStack::getCount).reduce(0, Integer::sum);
+        int total = 0;
+        for(ItemStack stack : getContents(inventoryStack)) {
+            if(WandUtil.stackEquals(stack, itemStack)) total += stack.getCount();
+        }
+        return total;
     }
 
     @Override
     public int useItems(Player player, ItemStack itemStack, ItemStack inventoryStack, int count) {
-        AtomicInteger newCount = new AtomicInteger(count);
+        List<ItemStack> remaining = new ArrayList<>();
 
-        List<ItemStack> itemStacks = getContents(inventoryStack).filter((stack -> {
-            if(WandUtil.stackEquals(stack, itemStack)) {
-                int toTake = Math.min(newCount.get(), stack.getCount());
+        for(ItemStack stack : getContents(inventoryStack)) {
+            if(count > 0 && WandUtil.stackEquals(stack, itemStack)) {
+                int toTake = Math.min(count, stack.getCount());
                 stack.shrink(toTake);
-                newCount.set(newCount.get() - toTake);
+                count -= toTake;
             }
-            return !stack.isEmpty();
-        })).toList();
+            if(!stack.isEmpty()) remaining.add(stack);
+        }
 
-        setItemList(inventoryStack, itemStacks);
-
-        return newCount.get();
+        inventoryStack.set(DataComponents.BUNDLE_CONTENTS, new BundleContents(remaining));
+        return count;
     }
 
-    private Stream<ItemStack> getContents(ItemStack bundleStack) {
-        CompoundTag compoundtag = bundleStack.getTag();
-        if(compoundtag == null) {
-            return Stream.empty();
-        }
-        else {
-            ListTag listtag = compoundtag.getList("Items", 10);
-            return listtag.stream().map(CompoundTag.class::cast).map(ItemStack::of);
-        }
-    }
+    // Returns copies, because component contents must not be mutated in place.
+    private List<ItemStack> getContents(ItemStack bundleStack) {
+        BundleContents contents = bundleStack.get(DataComponents.BUNDLE_CONTENTS);
+        if(contents == null) return new ArrayList<>();
 
-    private void setItemList(ItemStack itemStack, List<ItemStack> itemStacks) {
-        CompoundTag rootTag = itemStack.getOrCreateTag();
-        ListTag listTag = new ListTag();
-        rootTag.put("Items", listTag);
-
-        for(ItemStack stack : itemStacks) {
-            CompoundTag itemTag = new CompoundTag();
-            stack.save(itemTag);
-            listTag.add(itemTag);
-        }
+        List<ItemStack> stacks = new ArrayList<>();
+        contents.itemsCopy().forEach(stacks::add);
+        return stacks;
     }
 }

@@ -6,14 +6,16 @@ import net.minecraft.nbt.CompoundTag;
 public class OptionEnum<E extends Enum<E>> implements IOption<E>
 {
     private final CompoundTag tag;
+    private final Runnable onChange;
     private final String key;
     private final Class<E> enumClass;
     private final boolean enabled;
     private final E dval;
     private E value;
 
-    public OptionEnum(CompoundTag tag, String key, Class<E> enumClass, E dval, boolean enabled) {
+    public OptionEnum(CompoundTag tag, Runnable onChange, String key, Class<E> enumClass, E dval, boolean enabled) {
         this.tag = tag;
+        this.onChange = onChange;
         this.key = key;
         this.enumClass = enumClass;
         this.enabled = enabled;
@@ -22,8 +24,8 @@ public class OptionEnum<E extends Enum<E>> implements IOption<E>
         value = Enums.getIfPresent(enumClass, tag.getString(key).toUpperCase()).or(dval);
     }
 
-    public OptionEnum(CompoundTag tag, String key, Class<E> enumClass, E dval) {
-        this(tag, key, enumClass, dval, true);
+    public OptionEnum(CompoundTag tag, Runnable onChange, String key, Class<E> enumClass, E dval) {
+        this(tag, onChange, key, enumClass, dval, true);
     }
 
     @Override
@@ -51,6 +53,7 @@ public class OptionEnum<E extends Enum<E>> implements IOption<E>
         if(!enabled) return;
         value = val;
         tag.putString(key, getValueString());
+        onChange.run();
     }
 
     @Override

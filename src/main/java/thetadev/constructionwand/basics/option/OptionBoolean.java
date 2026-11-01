@@ -5,12 +5,14 @@ import net.minecraft.nbt.CompoundTag;
 public class OptionBoolean implements IOption<Boolean>
 {
     private final CompoundTag tag;
+    private final Runnable onChange;
     private final String key;
     private final boolean enabled;
     private boolean value;
 
-    public OptionBoolean(CompoundTag tag, String key, boolean dval, boolean enabled) {
+    public OptionBoolean(CompoundTag tag, Runnable onChange, String key, boolean dval, boolean enabled) {
         this.tag = tag;
+        this.onChange = onChange;
         this.key = key;
         this.enabled = enabled;
 
@@ -18,8 +20,8 @@ public class OptionBoolean implements IOption<Boolean>
         else value = dval;
     }
 
-    public OptionBoolean(CompoundTag tag, String key, boolean dval) {
-        this(tag, key, dval, true);
+    public OptionBoolean(CompoundTag tag, Runnable onChange, String key, boolean dval) {
+        this(tag, onChange, key, dval, true);
     }
 
     @Override
@@ -47,6 +49,7 @@ public class OptionBoolean implements IOption<Boolean>
         if(!enabled) return;
         value = val;
         tag.putBoolean(key, value);
+        onChange.run();
     }
 
     @Override

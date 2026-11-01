@@ -1,49 +1,35 @@
 package thetadev.constructionwand.network;
 
+import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.event.network.CustomPayloadEvent;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import thetadev.constructionwand.ConstructionWand;
 
 import java.util.HashSet;
 import java.util.Set;
 
-public class PacketUndoBlocks
+public record PacketUndoBlocks(Set<BlockPos> undoBlocks) implements CustomPacketPayload
 {
-    public HashSet<BlockPos> undoBlocks;
+    public static final Type<PacketUndoBlocks> TYPE = new Type<>(ConstructionWand.loc("undo_blocks"));
+
+    public static final StreamCodec<ByteBuf, PacketUndoBlocks> STREAM_CODEC =
+            BlockPos.STREAM_CODEC.apply(ByteBufCodecs.collection(HashSet::new))
+                    .map(PacketUndoBlocks::new, msg -> new HashSet<>(msg.undoBlocks()));
 
     public PacketUndoBlocks(Set<BlockPos> undoBlocks) {
         this.undoBlocks = new HashSet<>(undoBlocks);
     }
 
-    private PacketUndoBlocks(HashSet<BlockPos> undoBlocks) {
-        this.undoBlocks = undoBlocks;
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
-    public static void encode(PacketUndoBlocks msg, FriendlyByteBuf buffer) {
-        for(BlockPos pos : msg.undoBlocks) {
-            buffer.writeBlockPos(pos);
-        }
-    }
-
-    public static PacketUndoBlocks decode(FriendlyByteBuf buffer) {
-        HashSet<BlockPos> undoBlocks = new HashSet<>();
-
-        while(buffer.isReadable()) {
-            undoBlocks.add(buffer.readBlockPos());
-        }
-        return new PacketUndoBlocks(undoBlocks);
-    }
-
-    public static class Handler
-    {
-        public static void handle(final PacketUndoBlocks msg, final CustomPayloadEvent.Context ctx) {
-            if(!ctx.getDirection().getReceptionSide().isClient()) return;
-
-            //ConstructionWand.LOGGER.debug("PacketUndoBlocks received, Blocks: " + msg.undoBlocks.size());
-            ConstructionWand.instance.renderBlockPreview.undoBlocks = msg.undoBlocks;
-
-            ctx.setPacketHandled(true);
-        }
+    public static void handle(final PacketUndoBlocks msg, final IPayloadContext ctx) {
+        if(ConstructionWand.instance.renderBlockPreview == null) return;
+        ConstructionWand.instance.renderBlockPreview.undoBlocks = msg.undoBlocks();
     }
 }

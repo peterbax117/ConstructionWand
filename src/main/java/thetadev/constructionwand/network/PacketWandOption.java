@@ -1,58 +1,49 @@
 package thetadev.constructionwand.network;
 
-import net.minecraft.network.FriendlyByteBuf;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.event.network.CustomPayloadEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
+import thetadev.constructionwand.ConstructionWand;
 import thetadev.constructionwand.basics.WandUtil;
 import thetadev.constructionwand.basics.option.IOption;
 import thetadev.constructionwand.basics.option.WandOptions;
 import thetadev.constructionwand.items.wand.ItemWand;
 
-public class PacketWandOption
+public record PacketWandOption(String key, String value, boolean notifyPlayer) implements CustomPacketPayload
 {
-    public final String key;
-    public final String value;
-    public final boolean notify;
+    public static final Type<PacketWandOption> TYPE = new Type<>(ConstructionWand.loc("wand_option"));
+
+    public static final StreamCodec<ByteBuf, PacketWandOption> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.stringUtf8(100), PacketWandOption::key,
+            ByteBufCodecs.stringUtf8(100), PacketWandOption::value,
+            ByteBufCodecs.BOOL, PacketWandOption::notifyPlayer,
+            PacketWandOption::new);
 
     public PacketWandOption(IOption<?> option, boolean notify) {
         this(option.getKey(), option.getValueString(), notify);
     }
 
-    private PacketWandOption(String key, String value, boolean notify) {
-        this.key = key;
-        this.value = value;
-        this.notify = notify;
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
-    public static void encode(PacketWandOption msg, FriendlyByteBuf buffer) {
-        buffer.writeUtf(msg.key);
-        buffer.writeUtf(msg.value);
-        buffer.writeBoolean(msg.notify);
-    }
+    public static void handle(final PacketWandOption msg, final IPayloadContext ctx) {
+        if(!(ctx.player() instanceof ServerPlayer player)) return;
 
-    public static PacketWandOption decode(FriendlyByteBuf buffer) {
-        return new PacketWandOption(buffer.readUtf(100), buffer.readUtf(100), buffer.readBoolean());
-    }
+        ItemStack wand = WandUtil.holdingWand(player);
+        if(wand == null) return;
+        WandOptions options = new WandOptions(wand);
 
-    public static class Handler
-    {
-        public static void handle(final PacketWandOption msg, final CustomPayloadEvent.Context ctx) {
-            if(!ctx.getDirection().getReceptionSide().isServer()) return;
+        IOption<?> option = options.get(msg.key());
+        if(option == null) return;
+        option.setValueString(msg.value());
 
-            ServerPlayer player = ctx.getSender();
-            if(player == null) return;
-
-            ItemStack wand = WandUtil.holdingWand(player);
-            if(wand == null) return;
-            WandOptions options = new WandOptions(wand);
-
-            IOption<?> option = options.get(msg.key);
-            if(option == null) return;
-            option.setValueString(msg.value);
-
-            if(msg.notify) ItemWand.optionMessage(player, option);
-            player.getInventory().setChanged();
-        }
+        if(msg.notifyPlayer()) ItemWand.optionMessage(player, option);
+        player.getInventory().setChanged();
     }
 }
