@@ -15,6 +15,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
+import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import org.lwjgl.glfw.GLFW;
 import thetadev.constructionwand.ConstructionWand;
 import thetadev.constructionwand.api.IWandUpgrade;
@@ -185,6 +188,15 @@ public final class ClientTests
         ctx.clickUse();
         ctx.await("server to undo the placement", () -> ctx.onServer(p -> expected.stream()
                 .allMatch(pos -> p.serverLevel().getBlockState(pos).isAir())));
+    }
+
+    @ClientTest(value = "config screen opens from the mods menu", order = 7)
+    public static void configScreen(ClientTestContext ctx) {
+        var container = ModList.get().getModContainerById(ConstructionWand.MODID).orElseThrow();
+        var factory = container.getCustomExtension(IConfigScreenFactory.class);
+        check(factory.isPresent(), "Construction Wand should register a config screen");
+        ctx.onClient(() -> ctx.mc().setScreen(factory.get().createScreen(container, null)));
+        ctx.awaitScreen(ConfigurationScreen.class);
     }
 
     // Helpers

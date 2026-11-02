@@ -3,6 +3,7 @@ package thetadev.constructionwand.gametest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Direction.Axis;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -17,7 +18,11 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.common.util.FakePlayer;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import io.github.peterbax117.modtestharness.gametest.HarnessTemplates;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -369,6 +374,10 @@ public class WandFeatureTests
                 ModItems.CORE_ANGEL, ModItems.CORE_DESTRUCTION)) {
             ResourceLocation id = item.getId();
             Optional<RecipeHolder<?>> recipe = helper.getLevel().getRecipeManager().byKey(id);
+            if(craftTweakerLoaded() && item == ModItems.WAND_STONE) {
+                helper.assertFalse(recipe.isPresent(), "CraftTweaker sample script should remove " + id);
+                continue;
+            }
             helper.assertTrue(recipe.isPresent(), "Missing recipe " + id);
             ItemStack result = recipe.get().value().getResultItem(helper.getLevel().registryAccess());
             helper.assertTrue(result.is(item.get()), "Recipe " + id + " makes " + result);
@@ -378,6 +387,13 @@ public class WandFeatureTests
 
     @GameTest(template = SMALL)
     public static void everyUpgradeableWandAcceptsBothCores(GameTestHelper helper) {
+        if(craftTweakerLoaded()) {
+            CraftingInput input = CraftingInput.of(2, 1, List.of(new ItemStack(ModItems.WAND_IRON.get()), new ItemStack(ModItems.CORE_ANGEL.get())));
+            helper.assertFalse(helper.getLevel().getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel()).isPresent(),
+                    "CraftTweaker sample script should remove the upgrade recipe");
+            helper.succeed();
+            return;
+        }
         for(Item wand : List.of(ModItems.WAND_IRON.get(), ModItems.WAND_DIAMOND.get(), ModItems.WAND_INFINITY.get())) {
             for(Item core : List.of(ModItems.CORE_ANGEL.get(), ModItems.CORE_DESTRUCTION.get())) {
                 ItemStack result = craftUpgrade(helper, new ItemStack(wand), core);
@@ -394,6 +410,70 @@ public class WandFeatureTests
         boolean matches = helper.getLevel().getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel()).isPresent();
         helper.assertFalse(matches, "Installing the same core twice should not match");
         helper.succeed();
+    }
+
+    // Integrations
+
+    @GameTest(template = SMALL)
+    public static void craftTweakerScriptChangesRecipes(GameTestHelper helper) {
+        // Pack makers change recipes with CraftTweaker or KubeJS. src/crafttweaker/scripts/constructionwand_test.zs adds
+        // stick + cobblestone -> stone wand and removes the upgrade recipe; without CraftTweaker neither change exists.
+        boolean crafttweaker = craftTweakerLoaded();
+        CraftingInput input = CraftingInput.of(2, 1, List.of(new ItemStack(Items.STICK), new ItemStack(Items.COBBLESTONE)));
+        var easy = helper.getLevel().getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel());
+        helper.assertValueEqual(easy.isPresent(), crafttweaker, "stick + cobblestone recipe present");
+        if(crafttweaker) {
+            ItemStack result = easy.get().value().assemble(input, helper.getLevel().registryAccess());
+            helper.assertTrue(result.is(ModItems.WAND_STONE.get()), "Script recipe should make a stone wand, made " + result);
+        }
+        boolean upgrade = helper.getLevel().getRecipeManager().byKey(ConstructionWand.loc("dynamic/wand_upgrade")).isPresent();
+        helper.assertValueEqual(upgrade, !crafttweaker, "upgrade recipe present");
+        helper.succeed();
+    }
+
+    @GameTest(template = SMALL)
+    public static void wandTakesBlocksFromSophisticatedBackpack(GameTestHelper helper) {
+        // Confirmed design: like shulker boxes and bundles, backpacks in the inventory supply blocks.
+        if(!ModList.get().isLoaded("sophisticatedbackpacks")) {
+            helper.succeed();
+            return;
+        }
+        buildFloor(helper);
+        FakePlayer player = survivalPlayer(helper, new ItemStack(ModItems.WAND_STONE.get()));
+        ItemStack backpack = new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse("sophisticatedbackpacks:backpack")));
+        player.getInventory().setItem(1, backpack);
+        // Sophisticated Backpacks only exposes contents once the backpack has been used (it assigns a contents UUID
+        // on first access, as when a player first opens it). Simulate that first use.
+        initializeSophisticatedBackpack(player.getInventory().getItem(1));
+        IItemHandler storage = player.getInventory().getItem(1).getCapability(Capabilities.ItemHandler.ITEM);
+        helper.assertTrue(storage != null, "Backpack should expose an item handler capability");
+        ItemStack leftover = ItemHandlerHelper.insertItemStacked(storage, new ItemStack(Items.STONE, 32), false);
+        helper.assertTrue(leftover.isEmpty(), "Backpack should accept 32 stone (slots=" + storage.getSlots()
+                + ", leftover=" + leftover.getCount() + ", handler=" + storage.getClass().getSimpleName() + ")");
+
+        useWandOn(helper, player, SMALL_CENTER, Direction.UP);
+
+        assertLayer(helper, Blocks.STONE, 2);
+        int left = 0;
+        IItemHandler after = player.getInventory().getItem(1).getCapability(Capabilities.ItemHandler.ITEM);
+        for(int i = 0; i < after.getSlots(); i++) if(after.getStackInSlot(i).is(Items.STONE)) left += after.getStackInSlot(i).getCount();
+        helper.assertValueEqual(left, 32 - 9, "stone left in the backpack");
+        helper.succeed();
+    }
+
+    private static boolean craftTweakerLoaded() {
+        return ModList.get().isLoaded("crafttweaker");
+    }
+
+    /** Reflection keeps Sophisticated Backpacks a runtime-only test dependency. */
+    private static void initializeSophisticatedBackpack(ItemStack backpack) {
+        try {
+            Class<?> wrapperClass = Class.forName("net.p3pp3rf1y.sophisticatedbackpacks.backpack.wrapper.BackpackWrapper");
+            Object wrapper = wrapperClass.getMethod("fromStack", ItemStack.class).invoke(null, backpack);
+            wrapper.getClass().getMethod("getInventoryHandler").invoke(wrapper);
+        } catch(ReflectiveOperationException e) {
+            throw new AssertionError("Could not initialize the Sophisticated Backpacks backpack", e);
+        }
     }
 
     // Shared assertions

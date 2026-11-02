@@ -1,3 +1,31 @@
+# NeoForge 1.21.1 port (unofficial)
+
+This branch is an unofficial port of Construction Wand by ThetaDev to Minecraft 1.21.1 and NeoForge, by
+peterbax117. The original project is https://github.com/Theta-Dev/ConstructionWand (MIT).
+
+Integrations (all optional; the mod works fully by itself):
+
+| Mod | Integration |
+|---|---|
+| JEI | Information pages for every wand and core |
+| Sophisticated Backpacks | Blocks stored in a backpack in your inventory are used, like shulker boxes and bundles |
+| CraftTweaker, KubeJS | Recipes are standard data recipes, so pack makers can replace them or remove wand upgrades |
+| Botania | Removed: Botania has no 1.21.1 release |
+
+Settings are editable in game from the Mods menu (NeoForge config screen).
+
+Testing uses [neoforge-mod-test-harness](https://github.com/peterbax117/neoforge-mod-test-harness), cloned next to
+this repository:
+
+```
+gradlew runGameTestServer -Pstandalone      # server tests, no optional mods
+gradlew runGameTestServer                   # with JEI and Sophisticated Backpacks
+gradlew runGameTestServer -Pcrafttweaker    # plus CraftTweaker and a sample recipe script
+gradlew clientTest -Pstandalone             # real client: controls, screens, previews
+gradlew clientTest
+```
+
+---
 # Construction Wand
 
 With a Construction Wand you can place multiple blocks (up to 1024) at once, extending your build on the side you're

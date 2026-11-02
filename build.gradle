@@ -26,6 +26,11 @@ sourceSets.main.resources {
 
 repositories {
     maven {
+        name = 'Modrinth (test-only integrations)'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+    maven {
         name = 'BlameJared (JEI)'
         url = 'https://maven.blamejared.com'
     }
@@ -142,4 +147,35 @@ idea {
 def harnessDir = file(System.getenv('MOD_TEST_HARNESS_DIR') ?: '../neoforge-mod-test-harness')
 if(harnessDir.isDirectory()) {
     apply from: new File(harnessDir, 'gradle/test-harness.gradle')
+
+    // Test setups (see README):
+    //   default         JEI + Sophisticated Backpacks
+    //   -Pstandalone    no optional mods: the configuration every player has
+    //   -Pcrafttweaker  default plus CraftTweaker and a sample pack-maker script that replaces a recipe
+    def standalone = project.hasProperty('standalone')
+    def crafttweaker = project.hasProperty('crafttweaker')
+    dependencies {
+        if(!standalone) {
+            gametestRuntimeOnly "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
+            clienttestRuntimeOnly "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
+            gametestRuntimeOnly "maven.modrinth:sophisticated-backpacks:${sophisticated_backpacks_version}"
+            gametestRuntimeOnly "maven.modrinth:sophisticated-core:${sophisticated_core_version}"
+        }
+        if(crafttweaker) {
+            gametestRuntimeOnly "com.blamejared.crafttweaker:CraftTweaker-neoforge-${minecraft_version}:${crafttweaker_version}"
+        }
+    }
+
+    // CraftTweaker reads scripts from <game dir>/scripts; the GameTest server runs in ./run.
+    def scriptSource = file('src/crafttweaker/scripts')
+    def scriptTarget = file('run/scripts')
+    tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+        doFirst {
+            scriptTarget.mkdirs()
+            scriptSource.listFiles().each { f -> new File(scriptTarget, f.name).delete() }
+            if(crafttweaker) {
+                scriptSource.listFiles().each { f -> java.nio.file.Files.copy(f.toPath(), new File(scriptTarget, f.name).toPath()) }
+            }
+        }
+    }
 }

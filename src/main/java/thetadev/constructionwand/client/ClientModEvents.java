@@ -4,6 +4,9 @@ import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.util.FastColor;
 import net.minecraft.world.item.Item;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
@@ -17,6 +20,11 @@ import thetadev.constructionwand.items.wand.ItemWand;
 @EventBusSubscriber(modid = ConstructionWand.MODID, value = Dist.CLIENT)
 public class ClientModEvents
 {
+    /** Settings editable from the Mods menu through NeoForge's built-in config screen. */
+    public static void registerConfigScreen(ModContainer container) {
+        container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+    }
+
     public static void registerModelProperties() {
         for(DeferredItem<Item> wand : ModItems.WANDS) {
             ItemProperties.register(

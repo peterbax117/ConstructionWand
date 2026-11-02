@@ -165,6 +165,12 @@ public class WandGameTests
 
         Optional<RecipeHolder<CraftingRecipe>> recipe = helper.getLevel().getRecipeManager()
                 .getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel());
+        if(net.neoforged.fml.ModList.get().isLoaded("crafttweaker")) {
+            // The -Pcrafttweaker run's sample script removes the upgrade recipe.
+            helper.assertFalse(recipe.isPresent(), "CraftTweaker sample script should remove the upgrade recipe");
+            helper.succeed();
+            return;
+        }
         helper.assertTrue(recipe.isPresent(), "Upgrade recipe should be loaded and match iron wand + angel core");
         helper.assertValueEqual(recipe.get().id(), ConstructionWand.loc("dynamic/wand_upgrade"), "recipe id");
 

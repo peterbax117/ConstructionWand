@@ -44,7 +44,10 @@ public class ConstructionWand {
         undoHistory = new UndoHistory();
 
         modEventBus.addListener(this::commonSetup);
-        if(FMLEnvironment.dist.isClient()) modEventBus.addListener(this::clientSetup);
+        if(FMLEnvironment.dist.isClient()) {
+            modEventBus.addListener(this::clientSetup);
+            ClientModEvents.registerConfigScreen(modContainer);
+        }
         modEventBus.addListener(ModMessages::register);
 
         ModItems.ITEMS.register(modEventBus);
